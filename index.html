@@ -46,6 +46,7 @@
     .btn-linkedin { background:var(--blue); color:white; }
     .btn-copy { background:var(--green); color:white; }
     .btn-whatsapp { background:#25D366; color:white; }
+    .btn-contact { background:#7c3aed; color:white; }
     .btn-light { background:#e5e7eb; color:#111827; }
     .btn-disabled { background:#e5e7eb; color:#6b7280; cursor:not-allowed; }
     .grid { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin-top:12px; }
@@ -304,6 +305,7 @@
           ${l.linkedin ? `<a class="btn btn-linkedin" href="${escapeAttr(l.linkedin)}" target="_blank">Open LinkedIn Profile</a>` : `<button class="btn btn-disabled" disabled>No LinkedIn Profile</button>`}
           <button class="btn btn-copy" onclick="copyMessage()">Copy Message</button>
           ${l.phone_number ? `<button class="btn btn-copy" onclick="copyPhone()">Copy Number</button>` : `<button class="btn btn-disabled" disabled>No Number</button>`}
+          ${hasWhatsApp(l) ? `<button class="btn btn-contact" onclick="createContact()">Create Contact</button>` : ''}
           ${hasWhatsApp(l) ? `<a class="btn btn-whatsapp" href="${escapeAttr(whatsappUrl(l))}" target="_blank" rel="noopener">Open WhatsApp</a>` : ''}
           <button class="btn btn-light" onclick="markToday()">Set Contact Date Today</button>
         </div>
@@ -407,6 +409,103 @@
       const l = leads.find(x => x.id === selectedId);
       if (!l || !l.phone_number) return;
       copyText(l.phone_number, 'Number copied');
+    }
+
+
+    function vcardEscape(value) {
+      return String(value || '')
+        .replace(/\\/g, '\\\\')
+        .replace(/\r?\n/g, '\\n')
+        .replace(/;/g, '\\;')
+        .replace(/,/g, '\\,');
+    }
+
+    function contactFileName(lead) {
+      const base = `${lead.name || 'Aquaverse Lead'} - ${lead.company || 'Contact'}`;
+      return base
+        .replace(/[<>:\"/\\|?*\x00-\x1F]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 100) + '.vcf';
+    }
+
+    function getContactNumbers(lead) {
+      const values = [lead.phone_number];
+      if (lead.all_phone_numbers) {
+        values.push(...String(lead.all_phone_numbers).split(/[;,\n]+/));
+      }
+
+      const seen = new Set();
+      return values
+        .map(value => String(value || '').trim())
+        .filter(Boolean)
+        .filter(value => {
+          const normalized = value.replace(/\D/g, '');
+          if (!normalized || seen.has(normalized)) return false;
+          seen.add(normalized);
+          return true;
+        });
+    }
+
+    async function createContact() {
+      const lead = leads.find(x => x.id === selectedId);
+      if (!lead || !hasWhatsApp(lead)) {
+        showToast('No verified WhatsApp number');
+        return;
+      }
+
+      const nameParts = String(lead.name || 'Aquaverse Lead').trim().split(/\s+/);
+      const familyName = nameParts.length > 1 ? nameParts.pop() : '';
+      const givenName = nameParts.join(' ') || lead.name || 'Aquaverse Lead';
+      const numbers = getContactNumbers(lead);
+      const noteParts = [
+        'Aquaverse outreach lead',
+        lead.country ? `Country: ${lead.country}` : '',
+        hasWhatsApp(lead) ? 'WhatsApp verified' : 'Phone number only'
+      ].filter(Boolean);
+
+      const lines = [
+        'BEGIN:VCARD',
+        'VERSION:3.0',
+        `FN:${vcardEscape(lead.name || 'Aquaverse Lead')}`,
+        `N:${vcardEscape(familyName)};${vcardEscape(givenName)};;;`,
+        lead.company ? `ORG:${vcardEscape(lead.company)}` : '',
+        lead.title ? `TITLE:${vcardEscape(lead.title)}` : '',
+        ...numbers.map((number, index) => `TEL;TYPE=${index === 0 ? 'CELL' : 'WORK'}:${vcardEscape(number)}`),
+        lead.linkedin ? `URL:${vcardEscape(lead.linkedin)}` : '',
+        `NOTE:${vcardEscape(noteParts.join(' | '))}`,
+        'END:VCARD'
+      ].filter(Boolean);
+
+      const blob = new Blob([lines.join('\r\n')], { type: 'text/vcard;charset=utf-8' });
+      const filename = contactFileName(lead);
+
+      try {
+        const file = new File([blob], filename, { type: 'text/vcard' });
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            files: [file],
+            title: `Add ${lead.name || 'contact'}`,
+            text: `${lead.name || 'Contact'}${lead.company ? ' - ' + lead.company : ''}`
+          });
+          showToast('Contact file opened');
+          return;
+        }
+      } catch (error) {
+        if (error && error.name === 'AbortError') return;
+        console.warn('Native contact share unavailable; using file download.', error);
+      }
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      link.rel = 'noopener';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      showToast('Contact file created');
     }
 
     function markToday() {
