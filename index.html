@@ -678,6 +678,17 @@
       showToast('Opening Add Contact — tap Save');
     }
 
+    function openWhatsAppForLead(lead) {
+      const url = whatsappUrl(lead);
+      if (!url || url === '#') return false;
+
+      // Open WhatsApp from the same user click so mobile browsers do not block it.
+      // wa.me launches the installed WhatsApp app when available and otherwise
+      // falls back to WhatsApp Web / the normal WhatsApp landing page.
+      const opened = window.open(url, '_blank', 'noopener,noreferrer');
+      return Boolean(opened);
+    }
+
     async function createContact() {
       const lead = leads.find(x => x.id === selectedId);
       if (!lead || !hasWhatsApp(lead)) {
@@ -689,11 +700,24 @@
       const familyName = nameParts.length > 1 ? nameParts.pop() : '';
       const givenName = nameParts.join(' ') || lead.name || 'Aquaverse Lead';
       const numbers = getContactNumbers(lead);
+      const primaryNumber = numbers[0] || lead.phone_number || '';
       const noteParts = [
         'Aquaverse outreach lead',
         lead.country ? `Country: ${lead.country}` : '',
+        lead.linkedin ? `LinkedIn: ${lead.linkedin}` : '',
         'WhatsApp verified'
       ].filter(Boolean);
+
+      // Put the useful contact details on the clipboard as a fallback. This is
+      // especially helpful in WhatsApp, where the internal "Create contact"
+      // page is not exposed as a public browser deep link.
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(`${lead.name || 'Aquaverse Lead'}\n${primaryNumber}`);
+        }
+      } catch (error) {
+        console.warn('Clipboard copy unavailable.', error);
+      }
 
       const lines = [
         'BEGIN:VCARD',
@@ -713,22 +737,30 @@
       const blobUrl = URL.createObjectURL(blob);
       setTimeout(() => URL.revokeObjectURL(blobUrl), 120000);
 
+      // Open WhatsApp first, directly from the button click. The contact editor
+      // then opens in the current tab/app. On mobile this normally leaves
+      // WhatsApp ready in the background on the selected person's chat.
+      const whatsappOpened = openWhatsAppForLead(lead);
+
       if (isAndroidDevice()) {
         openAndroidContactEditor(lead, numbers, blobUrl);
+        if (whatsappOpened) {
+          showToast('Contact editor opened. Save it, then return to WhatsApp.');
+        }
         return;
       }
 
-      // iPhone/iPad browsers cannot directly write a contact. Open/share the
-      // vCard so iOS can show its Add New Contact screen.
+      // iPhone/iPad: browsers cannot write Contacts directly. Open/share a vCard
+      // so iOS presents the native contact card while WhatsApp is also opened.
       try {
         const file = new File([blob], filename, { type: 'text/vcard' });
         if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
           await navigator.share({
             files: [file],
             title: `Add ${lead.name || 'contact'}`,
-            text: 'Open the contact card, then tap Add New Contact and Save.'
+            text: 'Save this contact, then return to the WhatsApp chat that was opened.'
           });
-          showToast('Open the contact card, then tap Save');
+          showToast('Save the contact, then return to WhatsApp');
           return;
         }
       } catch (error) {
@@ -738,10 +770,11 @@
 
       if (isMobileDevice()) {
         window.location.href = blobUrl;
-        showToast('Open the contact card, then tap Save');
+        showToast('Open the contact card and save it, then return to WhatsApp');
         return;
       }
 
+      // Desktop: WhatsApp Web opens in the new tab and the vCard downloads.
       const link = document.createElement('a');
       link.href = blobUrl;
       link.download = filename;
@@ -749,7 +782,7 @@
       document.body.appendChild(link);
       link.click();
       link.remove();
-      showToast('Contact file downloaded — open it and save');
+      showToast('WhatsApp opened and contact card downloaded');
     }
 
     function markToday() {
