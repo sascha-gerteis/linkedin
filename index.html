@@ -46,7 +46,11 @@
     .btn-linkedin { background:var(--blue); color:white; }
     .btn-copy { background:var(--green); color:white; }
     .btn-whatsapp { background:#25D366; color:white; }
-    .btn-contact { background:#7c3aed; color:white; }
+    .qr-panel { margin:14px 0 18px; padding:16px; border:1px solid var(--border); border-radius:12px; background:#fff; display:flex; gap:16px; align-items:center; flex-wrap:wrap; }
+    .qr-code { width:190px; min-height:190px; display:flex; align-items:center; justify-content:center; background:white; padding:8px; border:1px solid var(--border); border-radius:10px; }
+    .qr-copy { flex:1; min-width:220px; }
+    .qr-copy strong { display:block; margin-bottom:6px; }
+    .qr-copy .small { margin-top:6px; word-break:break-all; }
     .btn-light { background:#e5e7eb; color:#111827; }
     .btn-disabled { background:#e5e7eb; color:#6b7280; cursor:not-allowed; }
     .grid { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin-top:12px; }
@@ -59,22 +63,11 @@
     .small { color:var(--muted); font-size:12px; margin-top:8px; }
     .toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#111827; color:white; padding:12px 16px; border-radius:10px; opacity:0; pointer-events:none; transition:.2s; }
     .toast.show { opacity:1; }
-    .qr-modal { position:fixed; inset:0; background:rgba(15,23,42,.62); display:none; align-items:center; justify-content:center; padding:20px; z-index:9999; }
-    .qr-modal.show { display:flex; }
-    .qr-dialog { width:min(430px,100%); background:white; border-radius:16px; padding:22px; box-shadow:0 24px 70px rgba(0,0,0,.28); text-align:center; position:relative; }
-    .qr-dialog h3 { margin:0 32px 6px; font-size:22px; }
-    .qr-dialog p { color:var(--muted); font-size:13px; line-height:1.45; margin:8px 0 14px; }
-    .qr-close { position:absolute; right:12px; top:10px; width:36px; height:36px; border:0; border-radius:999px; background:#eef2f7; font-size:24px; cursor:pointer; line-height:1; }
-    .qr-code-wrap { width:292px; min-height:292px; max-width:100%; margin:14px auto; display:flex; align-items:center; justify-content:center; padding:14px; border:1px solid var(--border); border-radius:14px; background:white; }
-    .qr-code-wrap img, .qr-code-wrap canvas { max-width:100%; height:auto; }
-    .qr-contact-info { font-size:14px; font-weight:700; margin-top:8px; word-break:break-word; }
-    .btn-qr { background:#111827; color:white; }
     @media (max-width:960px) {
       .topbar { grid-template-columns:1fr; } .wrap { grid-template-columns:1fr; } .stats { grid-template-columns:repeat(2,1fr); }
       .lead-list { max-height:360px; } .grid { grid-template-columns:1fr; } .title-row { display:block; }
     }
   </style>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" integrity="sha512-CNgIRecGo7nphbeZ04Sc13ka07paqdeTu0WR1IM4kNcpmBAUSHSQX0FslNhTDadL4O5SAGapGt4FodqL8My0mA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 </head>
 <body>
   <header>
@@ -115,22 +108,9 @@
   </main>
 
   <div id="toast" class="toast">Copied</div>
+</div>
 
-  <div id="contactQrModal" class="qr-modal" onclick="if(event.target===this) closeContactQR()" aria-hidden="true">
-    <div class="qr-dialog" role="dialog" aria-modal="true" aria-labelledby="contactQrTitle">
-      <button class="qr-close" type="button" onclick="closeContactQR()" aria-label="Close">&times;</button>
-      <h3 id="contactQrTitle">Contact QR</h3>
-      <p>Scan this with the phone's Camera app. The QR contains a standard contact card, not a WhatsApp chat link.</p>
-      <div id="contactQrCode" class="qr-code-wrap"></div>
-      <div id="contactQrInfo" class="qr-contact-info"></div>
-      <p>If the camera recognizes contact QR codes, it will offer to create/save the contact. Otherwise use Add on This Device.</p>
-      <div class="buttons" style="justify-content:center;margin-bottom:0">
-        <button class="btn btn-contact" type="button" onclick="closeContactQR(); createContact();">Add on This Device</button>
-        <button class="btn btn-light" type="button" onclick="downloadSelectedContactCard()">Download .VCF</button>
-      </div>
-    </div>
-  </div>
-
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
   <script>
     function hasWhatsApp(lead) {
       return Boolean(
@@ -523,11 +503,19 @@
           ${l.linkedin ? `<a class="btn btn-linkedin" href="${escapeAttr(l.linkedin)}" target="_blank">Open LinkedIn Profile</a>` : `<button class="btn btn-disabled" disabled>No LinkedIn Profile</button>`}
           <button class="btn btn-copy" onclick="copyMessage()">Copy Message</button>
           ${l.phone_number ? `<button class="btn btn-copy" onclick="copyPhone()">Copy Number</button>` : `<button class="btn btn-disabled" disabled>No Number</button>`}
-          ${hasWhatsApp(l) ? `<button class="btn btn-contact" onclick="createContact()">Add to Contacts</button>` : ''}
-          ${hasWhatsApp(l) ? `<button class="btn btn-qr" onclick="showContactQR()">Contact QR</button>` : ''}
-          ${hasWhatsApp(l) ? `<a class="btn btn-whatsapp" href="${escapeAttr(whatsappUrl(l))}" target="_blank" rel="noopener">Open WhatsApp</a>` : ''}
+          ${hasWhatsApp(l) ? `<button class="btn btn-whatsapp" onclick="openSelectedLeadWhatsApp()">Contact on WhatsApp</button>` : ''}
           <button class="btn btn-light" onclick="markToday()">Set Contact Date Today</button>
         </div>
+
+        ${hasWhatsApp(l) ? `
+        <div class="qr-panel">
+          <div id="whatsappQr" class="qr-code"></div>
+          <div class="qr-copy">
+            <strong>Scan to open WhatsApp</strong>
+            <div>Scan this QR with another phone to open a WhatsApp chat with ${escapeHtml(l.name || 'this lead')}.</div>
+            <div class="small" id="whatsappQrUrl"></div>
+          </div>
+        </div>` : ''}
 
         <div class="grid">
           <div class="field"><div class="label">Company</div><div class="value">${escapeHtml(l.company || '-')}</div></div>
@@ -580,6 +568,7 @@
       const activeCard = Array.from(document.querySelectorAll('#leadList [data-lead-id]'))
         .find(card => card.dataset.leadId === id);
       if (activeCard) activeCard.classList.add('active');
+      if (hasWhatsApp(l)) setTimeout(() => renderWhatsAppQr(l), 0);
     }
 
     function scheduleText(l) {
@@ -630,282 +619,68 @@
       copyText(l.phone_number, 'Number copied');
     }
 
+    function renderWhatsAppQr(lead) {
+      const target = document.getElementById('whatsappQr');
+      const urlBox = document.getElementById('whatsappQrUrl');
+      if (!target || !lead || !lead.phone_number) return;
 
-    function vcardEscape(value) {
-      return String(value || '')
-        .replace(/\\/g, '\\\\')
-        .replace(/\r?\n/g, '\\n')
-        .replace(/;/g, '\\;')
-        .replace(/,/g, '\\,');
-    }
+      const number = String(lead.phone_number).replace(/\D/g, '');
+      if (!number) return;
 
-    function contactFileName(lead) {
-      const base = `${lead.name || 'Aquaverse Lead'} - ${lead.company || 'Contact'}`;
-      return base
-        .replace(/[<>:\"/\\|?*\x00-\x1F]/g, '')
-        .replace(/\s+/g, ' ')
-        .trim()
-        .slice(0, 100) + '.vcf';
-    }
-
-    function getContactNumbers(lead) {
-      const values = [lead.phone_number];
-      if (lead.all_phone_numbers) {
-        values.push(...String(lead.all_phone_numbers).split(/[;,\n]+/));
-      }
-
-      const seen = new Set();
-      return values
-        .map(value => String(value || '').trim())
-        .filter(Boolean)
-        .filter(value => {
-          const normalized = value.replace(/\D/g, '');
-          if (!normalized || seen.has(normalized)) return false;
-          seen.add(normalized);
-          return true;
-        });
-    }
-
-    function isAndroidDevice() {
-      return /Android/i.test(navigator.userAgent || '');
-    }
-
-    function isMobileDevice() {
-      return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
-    }
-
-    function intentExtra(value) {
-      return encodeURIComponent(String(value || ''));
-    }
-
-    function openAndroidContactEditor(lead, numbers, fallbackUrl) {
-      const primaryNumber = numbers[0] || lead.phone_number || '';
-      const note = [
-        'Aquaverse outreach lead',
-        lead.country ? `Country: ${lead.country}` : '',
-        lead.linkedin ? `LinkedIn: ${lead.linkedin}` : '',
-        'WhatsApp verified'
-      ].filter(Boolean).join(' | ');
-
-      const parts = [
-        'intent:#Intent',
-        'action=android.intent.action.INSERT',
-        'type=vnd.android.cursor.dir/contact',
-        `S.name=${intentExtra(lead.name || 'Aquaverse Lead')}`,
-        `S.phone=${intentExtra(primaryNumber)}`,
-        lead.company ? `S.company=${intentExtra(lead.company)}` : '',
-        lead.title ? `S.job_title=${intentExtra(lead.title)}` : '',
-        `S.notes=${intentExtra(note)}`,
-        'end'
-      ].filter(Boolean);
-
-      // Keep this launch directly inside the button click. Chrome only allows
-      // external intent launches when they are tied to a real user gesture.
-      let leftPage = false;
-      const visibilityHandler = () => {
-        if (document.hidden) leftPage = true;
-      };
-      document.addEventListener('visibilitychange', visibilityHandler);
-
-      window.location.href = parts.join(';');
-      showToast('Opening phone contact editor');
-
-      // Some Android browsers/OEM contact apps do not expose a browsable
-      // INSERT activity. If nothing opens, fall back to the generated vCard.
-      if (fallbackUrl) {
-        setTimeout(() => {
-          document.removeEventListener('visibilitychange', visibilityHandler);
-          if (!leftPage && !document.hidden) {
-            window.location.href = fallbackUrl;
-            showToast('Opening contact card — tap Save');
-          }
-        }, 900);
-      }
-    }
-
-    function openWhatsAppForLead(lead) {
-      const url = whatsappUrl(lead);
-      if (!url || url === '#') return false;
-
-      // Open WhatsApp from the same user click so mobile browsers do not block it.
-      // wa.me launches the installed WhatsApp app when available and otherwise
-      // falls back to WhatsApp Web / the normal WhatsApp landing page.
-      const opened = window.open(url, '_blank', 'noopener,noreferrer');
-      return Boolean(opened);
-    }
-
-    function buildQrContactVCard(lead) {
-      const numbers = getContactNumbers(lead);
-      const primaryNumber = numbers[0] || lead.phone_number || '';
-      const name = lead.name || 'Aquaverse Lead';
-
-      // Keep the QR payload intentionally compact for easier scanning.
-      return [
-        'BEGIN:VCARD',
-        'VERSION:3.0',
-        `FN:${vcardEscape(name)}`,
-        lead.company ? `ORG:${vcardEscape(lead.company)}` : '',
-        lead.title ? `TITLE:${vcardEscape(lead.title)}` : '',
-        primaryNumber ? `TEL;TYPE=CELL:${vcardEscape(primaryNumber)}` : '',
-        'END:VCARD'
-      ].filter(Boolean).join('\r\n');
-    }
-
-    function showContactQR() {
-      const lead = leads.find(x => x.id === selectedId);
-      if (!lead || !lead.phone_number) {
-        showToast('No phone number available');
-        return;
-      }
-
-      const modal = document.getElementById('contactQrModal');
-      const target = document.getElementById('contactQrCode');
-      const info = document.getElementById('contactQrInfo');
+      const url = `https://wa.me/${number}`;
+      if (urlBox) urlBox.textContent = url;
       target.innerHTML = '';
-      info.textContent = `${lead.name || 'Aquaverse Lead'} · ${lead.phone_number}`;
 
       if (typeof QRCode === 'undefined') {
-        target.innerHTML = '<div class="small">QR generator could not load. Use Add on This Device or Download .VCF.</div>';
-      } else {
-        new QRCode(target, {
-          text: buildQrContactVCard(lead),
-          width: 264,
-          height: 264,
-          correctLevel: QRCode.CorrectLevel.M
-        });
+        target.innerHTML = '<div class="small">QR generator could not load. The WhatsApp button still works.</div>';
+        return;
       }
 
-      modal.classList.add('show');
-      modal.setAttribute('aria-hidden', 'false');
+      new QRCode(target, {
+        text: url,
+        width: 174,
+        height: 174,
+        correctLevel: QRCode.CorrectLevel.M
+      });
     }
 
-    function closeContactQR() {
-      const modal = document.getElementById('contactQrModal');
-      if (!modal) return;
-      modal.classList.remove('show');
-      modal.setAttribute('aria-hidden', 'true');
-    }
-
-    function downloadSelectedContactCard() {
+    function openSelectedLeadWhatsApp() {
       const lead = leads.find(x => x.id === selectedId);
       if (!lead || !lead.phone_number) {
-        showToast('No phone number available');
-        return;
-      }
-      const blob = new Blob([buildQrContactVCard(lead)], { type: 'text/vcard;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = contactFileName(lead);
-      link.rel = 'noopener';
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-      showToast('Contact card downloaded');
-    }
-
-    document.addEventListener('keydown', event => {
-      if (event.key === 'Escape') closeContactQR();
-    });
-
-    function createContact() {
-      const lead = leads.find(x => x.id === selectedId);
-      if (!lead || !hasWhatsApp(lead)) {
-        showToast('No verified WhatsApp number');
+        showToast('No WhatsApp number available');
         return;
       }
 
-      const nameParts = String(lead.name || 'Aquaverse Lead').trim().split(/\s+/);
-      const familyName = nameParts.length > 1 ? nameParts.pop() : '';
-      const givenName = nameParts.join(' ') || lead.name || 'Aquaverse Lead';
-      const numbers = getContactNumbers(lead);
-      const primaryNumber = numbers[0] || lead.phone_number || '';
-      const noteParts = [
-        'Aquaverse outreach lead',
-        lead.country ? `Country: ${lead.country}` : '',
-        lead.linkedin ? `LinkedIn: ${lead.linkedin}` : '',
-        'WhatsApp verified'
-      ].filter(Boolean);
-
-      const lines = [
-        'BEGIN:VCARD',
-        'VERSION:3.0',
-        `FN:${vcardEscape(lead.name || 'Aquaverse Lead')}`,
-        `N:${vcardEscape(familyName)};${vcardEscape(givenName)};;;`,
-        lead.company ? `ORG:${vcardEscape(lead.company)}` : '',
-        lead.title ? `TITLE:${vcardEscape(lead.title)}` : '',
-        ...numbers.map((number, index) => `TEL;TYPE=${index === 0 ? 'CELL' : 'WORK'}:${vcardEscape(number)}`),
-        lead.linkedin ? `URL:${vcardEscape(lead.linkedin)}` : '',
-        `NOTE:${vcardEscape(noteParts.join(' | '))}`,
-        'END:VCARD'
-      ].filter(Boolean);
-
-      const blob = new Blob([lines.join('\r\n')], { type: 'text/vcard;charset=utf-8' });
-      const filename = contactFileName(lead);
-      const blobUrl = URL.createObjectURL(blob);
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 120000);
-
-      // Copy the name and number as a convenience, but do not await it. Awaiting
-      // here can consume the mobile browser's user gesture before an app launch.
-      try {
-        if (navigator.clipboard && window.isSecureContext) {
-          navigator.clipboard
-            .writeText(`${lead.name || 'Aquaverse Lead'}\n${primaryNumber}`)
-            .catch(error => console.warn('Clipboard copy unavailable.', error));
-        }
-      } catch (error) {
-        console.warn('Clipboard copy unavailable.', error);
-      }
-
-      // IMPORTANT: Do not open wa.me here. WhatsApp does not expose its internal
-      // "Create contact" screen as a public browser deep link. On Android, open
-      // the system contact editor instead. The separate Open WhatsApp button is
-      // responsible for opening the chat.
-      if (isAndroidDevice()) {
-        openAndroidContactEditor(lead, numbers, blobUrl);
+      const number = String(lead.phone_number).replace(/\D/g, '');
+      if (!number) {
+        showToast('Invalid WhatsApp number');
         return;
       }
 
-      // iPhone/iPad: a web page cannot directly write a new Contacts entry.
-      // Share/open a vCard so iOS can present the native contact-save flow.
-      if (isMobileDevice()) {
-        try {
-          const file = new File([blob], filename, { type: 'text/vcard' });
-          if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-            navigator.share({
-              files: [file],
-              title: `Add ${lead.name || 'contact'}`,
-              text: 'Save this contact to your phone.'
-            }).then(() => {
-              showToast('Contact card opened — tap Save');
-            }).catch(error => {
-              if (error && error.name === 'AbortError') return;
-              console.warn('Native contact share unavailable.', error);
-              window.location.href = blobUrl;
-              showToast('Opening contact card — tap Save');
-            });
-            return;
+      const webUrl = `https://wa.me/${number}`;
+      const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+
+      if (isMobile) {
+        // Use WhatsApp's app scheme first so the button goes straight to WhatsApp.
+        // If the app cannot handle it, fall back to the normal wa.me link.
+        const appUrl = `whatsapp://send?phone=${number}`;
+        let fallbackTimer = setTimeout(() => {
+          if (!document.hidden) window.location.href = webUrl;
+        }, 1200);
+
+        const cancelFallback = () => {
+          if (document.hidden) {
+            clearTimeout(fallbackTimer);
+            document.removeEventListener('visibilitychange', cancelFallback);
           }
-        } catch (error) {
-          console.warn('Native contact share unavailable.', error);
-        }
-
-        window.location.href = blobUrl;
-        showToast('Opening contact card — tap Save');
+        };
+        document.addEventListener('visibilitychange', cancelFallback);
+        window.location.href = appUrl;
         return;
       }
 
-      // Desktop browsers cannot add directly to the phone address book, so
-      // download a vCard that can be opened/imported in Contacts.
-      const link = document.createElement('a');
-      link.href = blobUrl;
-      link.download = filename;
-      link.rel = 'noopener';
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      showToast('Contact card downloaded');
+      // Desktop uses WhatsApp Web / the normal WhatsApp handoff page.
+      window.open(webUrl, '_blank', 'noopener,noreferrer');
     }
 
     function markToday() {
